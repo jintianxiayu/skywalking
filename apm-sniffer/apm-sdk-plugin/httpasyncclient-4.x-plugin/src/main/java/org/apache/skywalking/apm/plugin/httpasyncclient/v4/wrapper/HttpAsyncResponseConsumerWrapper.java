@@ -17,19 +17,19 @@
 
 package org.apache.skywalking.apm.plugin.httpasyncclient.v4.wrapper;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.http.HttpException;
 import org.apache.http.HttpResponse;
 import org.apache.http.nio.ContentDecoder;
 import org.apache.http.nio.IOControl;
 import org.apache.http.nio.protocol.HttpAsyncResponseConsumer;
 import org.apache.http.protocol.HttpContext;
-import org.apache.skywalking.apm.agent.core.context.ContextManager;
+import org.apache.skywalking.apm.agent.core.context.AsyncSpan;
 import org.apache.skywalking.apm.agent.core.context.tag.Tags;
-import org.apache.skywalking.apm.agent.core.context.trace.AbstractSpan;
-
-import java.io.IOException;
-
-import static org.apache.skywalking.apm.plugin.httpasyncclient.v4.SessionRequestCompleteInterceptor.CONTEXT_LOCAL;
+import org.apache.skywalking.apm.agent.core.context.trace.ExitSpan;
 
 /**
  * a wrapper for {@link HttpAsyncResponseConsumer} so we can be notified when the current response(every response will
@@ -38,21 +38,26 @@ import static org.apache.skywalking.apm.plugin.httpasyncclient.v4.SessionRequest
 public class HttpAsyncResponseConsumerWrapper<T> implements HttpAsyncResponseConsumer<T> {
 
     private HttpAsyncResponseConsumer<T> consumer;
+	private List<AsyncSpan> spans = new ArrayList<>();
 
-    public HttpAsyncResponseConsumerWrapper(HttpAsyncResponseConsumer<T> consumer) {
-        this.consumer = consumer;
-    }
+	public HttpAsyncResponseConsumerWrapper(HttpAsyncResponseConsumer<T> consumer, List<AsyncSpan> spans) {
+		this.consumer = consumer;
+		if (spans != null) {
+			this.spans = spans;
+		}
+	}
 
     @Override
     public void responseReceived(HttpResponse response) throws IOException, HttpException {
-        if (ContextManager.isActive()) {
-            int statusCode = response.getStatusLine().getStatusCode();
-            if (statusCode >= 400) {
-                AbstractSpan span = ContextManager.activeSpan().errorOccurred();
-                Tags.STATUS_CODE.set(span, String.valueOf(statusCode));
-            }
-            ContextManager.stopSpan();
-        }
+		int statusCode = response.getStatusLine().getStatusCode();
+		for (AsyncSpan span : spans) {
+			span.asyncFinish();
+			if (statusCode >= 400 && span instanceof ExitSpan) {
+				ExitSpan exitSpan = (ExitSpan) span;
+				exitSpan.errorOccurred();
+				Tags.STATUS_CODE.set(exitSpan, String.valueOf(statusCode));
+			}
+		}
         consumer.responseReceived(response);
     }
 
@@ -68,11 +73,13 @@ public class HttpAsyncResponseConsumerWrapper<T> implements HttpAsyncResponseCon
 
     @Override
     public void failed(Exception ex) {
-        CONTEXT_LOCAL.remove();
-        if (ContextManager.isActive()) {
-            ContextManager.activeSpan().errorOccurred().log(ex);
-            ContextManager.stopSpan();
-        }
+		for (AsyncSpan span : spans) {
+			span.asyncFinish();
+			if (span instanceof ExitSpan) {
+				ExitSpan exitSpan = (ExitSpan) span;
+				exitSpan.errorOccurred().log(ex);
+			}
+		}
         consumer.failed(ex);
 
     }
@@ -99,11 +106,13 @@ public class HttpAsyncResponseConsumerWrapper<T> implements HttpAsyncResponseCon
 
     @Override
     public boolean cancel() {
-        CONTEXT_LOCAL.remove();
-        if (ContextManager.isActive()) {
-            ContextManager.activeSpan().errorOccurred();
-            ContextManager.stopSpan();
-        }
+		for (AsyncSpan span : spans) {
+			span.asyncFinish();
+			if (span instanceof ExitSpan) {
+				ExitSpan exitSpan = (ExitSpan) span;
+				exitSpan.errorOccurred();
+			}
+		}
         return consumer.cancel();
     }
 }
