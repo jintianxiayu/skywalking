@@ -35,6 +35,7 @@ public class AbstractServerImplBuilderInstrumentation extends ClassInstanceMetho
     public static final String ENHANCE_METHOD = "addService";
     public static final String INTERCEPT_CLASS = "org.apache.skywalking.apm.plugin.grpc.v1.server.AbstractServerImplBuilderInterceptor";
     public static final String ARGUMENT_TYPE = "io.grpc.ServerServiceDefinition";
+    public static final String ARGUMENT_TYPE2 = "io.grpc.BindableService";
 
     @Override
     public ConstructorInterceptPoint[] getConstructorsInterceptPoints() {
@@ -48,6 +49,22 @@ public class AbstractServerImplBuilderInstrumentation extends ClassInstanceMetho
                 @Override
                 public ElementMatcher<MethodDescription> getMethodsMatcher() {
                     return named(ENHANCE_METHOD).and(takesArgumentWithType(0, ARGUMENT_TYPE));
+                }
+
+                @Override
+                public String getMethodsInterceptor() {
+                    return INTERCEPT_CLASS;
+                }
+
+                @Override
+                public boolean isOverrideArgs() {
+                    return true;
+                }
+            },
+            new InstanceMethodsInterceptPoint() {
+                @Override
+                public ElementMatcher<MethodDescription> getMethodsMatcher() {
+                    return named(ENHANCE_METHOD).and(takesArgumentWithType(0, ARGUMENT_TYPE2));
                 }
 
                 @Override

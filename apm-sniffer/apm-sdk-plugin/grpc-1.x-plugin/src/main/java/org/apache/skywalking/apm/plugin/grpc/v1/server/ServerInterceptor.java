@@ -51,6 +51,7 @@ public class ServerInterceptor implements io.grpc.ServerInterceptor {
             return new TracingServerCallListener<>(handler.startCall(new TracingServerCall<>(call, ContextManager.capture()), headers), call
                 .getMethodDescriptor(), ContextManager.capture());
         } finally {
+        	// 上面创建的entry span不应该在这里stop，应该在call.sendMessage/close或listener.onCancel中stop
             ContextManager.stopSpan();
         }
     }

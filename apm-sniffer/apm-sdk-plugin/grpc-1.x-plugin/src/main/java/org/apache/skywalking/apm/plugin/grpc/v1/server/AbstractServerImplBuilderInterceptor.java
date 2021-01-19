@@ -18,6 +18,7 @@
 
 package org.apache.skywalking.apm.plugin.grpc.v1.server;
 
+import io.grpc.BindableService;
 import io.grpc.ServerInterceptors;
 import io.grpc.ServerServiceDefinition;
 
@@ -33,8 +34,22 @@ import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.MethodInt
 public class AbstractServerImplBuilderInterceptor implements InstanceMethodsAroundInterceptor {
     @Override
     public void beforeMethod(EnhancedInstance objInst, Method method, Object[] allArguments, Class<?>[] argumentsTypes,
-        MethodInterceptResult result) {
-        allArguments[0] = ServerInterceptors.intercept((ServerServiceDefinition) allArguments[0], new ServerInterceptor());
+			MethodInterceptResult result) {
+
+		Object arg = allArguments[0];
+		if (arg instanceof BindableService) {
+			ServerServiceDefinition ssd = ((BindableService) arg).bindService();
+			ServerServiceDefinition wrappedSsd = ServerInterceptors.intercept(ssd, new ServerInterceptor());
+			allArguments[0] = new BindableService() {
+				@Override
+				public ServerServiceDefinition bindService() {
+					return wrappedSsd;
+				}
+			};
+		} else {
+			allArguments[0] = ServerInterceptors.intercept((ServerServiceDefinition) allArguments[0], new ServerInterceptor());
+		}
+    	
     }
 
     @Override
