@@ -84,6 +84,16 @@ public class TracingServerCallListener<REQUEST> extends ForwardingServerCallList
             ContextManager.stopSpan();
         }
     }
+    
+    @Override
+    public void onComplete() {
+    	ContextManager.continued(contextSnapshot);
+        try {
+            super.onComplete();
+        } finally {
+            ContextManager.stopSpan();
+        }
+    }
 
     @Override
     public void onHalfClose() {
